@@ -14,27 +14,29 @@
 #
 
 require 'rubygems'
-require 'ebb'
+require 'memcached'
 
-class MemCachedPersistentConnector 
-  def call(env)
-    path = env['PATH_INFO']
-    pass, method, key = path.split('/')
-    response_hash = {"Content-Type" => "text/plain", "Transfer-Encoding" => "chunked"}
-    
-    if(method.downcase == 'get')
-      [200, response_hash, [translate_to_memcached(key)]] 
-    else
-      #Not implemented
-      [501, response_hash, []]
-    end
-  end 
+$memcached = Memcached.new("localhost:11211")
+
+def translate_to_memcached(key)
+  $memcached.get(key).to_s
+rescue Memcached::NotFound
+  ""
+end
+
+def memcached_persistent_connector(env)
+  path = env['PATH_INFO']
+  pass, method, key = path.split('/')
+  response_hash = { "Content-Type" => "text/plain", "Content-Length" => '0' }
   
-  def translate_to_memcached(key)
-    "Hello"
+  if(method.downcase == 'get')
+    data = translate_to_memcached(key).to_s
+    [200, response_hash.merge({"Content-Length" => data.length.to_s}), [data]] 
+  else
+    #Not implemented
+    [501, response_hash, []]
   end
-  
-  private :translate_to_memcached
-  
 end 
-Ebb.start_server(MemCachedPersistentConnector.new, :port => 11212)
+
+
+
